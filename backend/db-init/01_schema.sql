@@ -103,5 +103,5 @@ CREATE TABLE IF NOT EXISTS pantry_hours (
             AND open_time < close_time
         )
     ),
-    CONSTRAINT time_range_is_unique_per_pantry UNIQUE (pantry_id, day_of_week, status)
+    CONSTRAINT time_range_is_unique_per_pantry UNIQUE (pantry_id, day_of_week, open_time)
 );
