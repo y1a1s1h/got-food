@@ -103,37 +103,48 @@ class PantryHours(db.Model):
     open_time = db.Column(db.Time)
     close_time = db.Column(db.Time)
 
+    def serialize(self):
+        # Convert times to readable 12-hr AM/PM times
+        if self.open_time is not None:
+            self.open_time = self.open_time.strftime("%-I:%M %p")
+        if self.close_time is not None:
+            self.close_time = self.close_time.strftime("%-I:%M %p")
+
+        return {
+            "id": self.id,
+            "pantry_id": self.pantry_id,
+            "day_of_week": self.day_of_week.name,
+            "status": self.status.name,
+            "open_time": self.open_time,
+            "close_time": self.close_time,
+        }
+
 
 # =========================
 # Routes
 # =========================
 
-
 # -------------------------
 # GET /api/pantries
-# TODO: Filter by query params: id, zip, city, supported_diet, open_now
 # -------------------------
 @app.route("/api/pantries", methods=["GET"])
 def get_pantries():
-    pantry_id = request.args.get("id", type=int)
     zip_code = request.args.get("zip")
     city = request.args.get("city")
     supported_diet = request.args.get("supported_diet")  # comma-separated
+    eligibility = request.args.get("eligibility")
     open_now = request.args.get("open_now", type=bool)
 
-    # TODO: Build dynamic query based on which filters exist
-    # Example:
     query = db.select(Pantries).order_by(Pantries.id)
-    if pantry_id:
-        query = query.where(id=pantry_id)
     if zip_code:
-        query = query.where(zip=zip_code)
+        query = query.filter_by(zip=zip_code)
     if city:
-        query = query.where(city=city)
+        query = query.filter_by(city=city)
     # if supported_diet:
-    #     query = query.filter(FoodPantry.supported_diets.any(supported_diet))
+    #     for diet in supported_diet:
+    #         query = query.filter(Pantries.supported_diets.any(supported_diet))
     # if open_now: join PantryHours and filter by current time
-    
+
     results = db.session.execute(query).scalars()
     results = [x.serialize() for x in results.all()]
     return jsonify(results)
@@ -141,53 +152,22 @@ def get_pantries():
 
 # -------------------------
 # GET /api/pantries/<id>
-# TODO: Return a single pantry by ID
 # -------------------------
 @app.route("/api/pantries/<int:pantry_id>", methods=["GET"])
 def get_pantry_by_id(pantry_id):
-    # TODO: Fetch pantry from DB
-    pantry = {
-        "id": pantry_id,
-        "name": "Central Pantry",
-        "address": "123 Main St",
-        "city": "Richmond",
-        "zip": "23220",
-        "phone": "555-1234",
-        "email": "info@pantry.org",
-        "eligibility": ["23220", "23221"],
-        "supported_diets": ["VEGAN", "HALAL"],
-        "comments": "Closed on holidays",
-        "created_at": datetime.utcnow().isoformat(),
-    }
-    # TODO: Return 404 if not found
+    pantry = db.get_or_404(Pantries, pantry_id)
+    pantry = pantry.serialize()
     return jsonify(pantry)
 
 
 # -------------------------
 # GET /api/pantries/<id>/hours
-# TODO: Return weekly hours for a pantry
 # -------------------------
 @app.route("/api/pantries/<int:pantry_id>/hours", methods=["GET"])
 def get_pantry_hours(pantry_id):
-    # TODO: Fetch pantry_hours from DB
-    hours = [
-        {
-            "id": 10,
-            "pantry_id": pantry_id,
-            "day_of_week": "MONDAY",
-            "status": "OPEN",
-            "open_time": "09:00:00",
-            "close_time": "17:00:00",
-        },
-        {
-            "id": 11,
-            "pantry_id": pantry_id,
-            "day_of_week": "TUESDAY",
-            "status": "CLOSED",
-            "open_time": None,
-            "close_time": None,
-        },
-    ]
+    query = db.select(PantryHours).filter_by(pantry_id=pantry_id)
+    hours = db.session.execute(query).scalars()
+    hours = [h.serialize() for h in hours]
     return jsonify(hours)
 
 
