@@ -7,6 +7,10 @@ import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
+import { MdEmail, MdPhone } from "react-icons/md";
+import { HiOutlineLocationMarker } from "react-icons/hi";
+import { IoLink } from "react-icons/io5";
+import { FaRegCommentDots } from "react-icons/fa";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -31,6 +35,12 @@ function DisplayMap() {
         locations.push({
           position: [p["latitude"], p["longitude"]],
           name: p["name"],
+          address: p["address"],
+          url: p["url"],
+          phone: p["phone"],
+          email : p["email"],
+          comments : p["comments"],
+
         });
       }
       setPantryLocations(locations);
@@ -58,7 +68,7 @@ function DisplayMap() {
         />
         {pantryLocations.map((loc, index) => (
           <Marker key={index} position={loc.position}>
-            <Popup>{loc.name}</Popup>
+            <Popup maxWidth={400} maxHeight={600}>{PopupText(loc)}</Popup>
           </Marker>
         ))}
       </MapContainer>
@@ -66,4 +76,41 @@ function DisplayMap() {
   );
 }
 
+function PopupText(loc)
+{
+  if (!loc.name)
+  {
+    loc.name = "none"
+  }
+  if (!loc.address)
+  {
+    loc.address = "none"
+  }
+  if (!loc.url)
+  {
+    loc.url = "none"
+  }
+  if (!loc.phone)
+  {
+    loc.phone = "none"
+  }
+  if (!loc.email)
+  {
+    loc.email = "none"
+  }
+  if (!loc.comments)
+  {
+    loc.comments = "none"
+  }
+  return (
+    <div style={{ width: "400px", maxHeight: "600px", overflowY: "auto", overflowX: "hidden" }}>
+      <h3> {loc.name} </h3>
+      <p> <HiOutlineLocationMarker/> : {loc.address}</p>
+      <p> <IoLink/> : {loc.url}</p>
+      <p> <MdPhone/> {loc.phone}</p>
+      <p> <MdEmail/>: {loc.email}</p>
+      <p> <FaRegCommentDots/> : {loc.comments}</p>
+    </div>
+  )
+}
 export default DisplayMap;
