@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getAllPantries } from "../utils/api_requests";
+import { getAllPantries, getPantryHours } from "../utils/api_requests";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -10,7 +10,7 @@ import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { MdEmail, MdPhone } from "react-icons/md";
 import { HiOutlineLocationMarker } from "react-icons/hi";
 import { IoLink } from "react-icons/io5";
-import { FaRegCommentDots } from "react-icons/fa";
+import { FaRegCommentDots, FaClock } from "react-icons/fa";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -40,9 +40,10 @@ function DisplayMap() {
           phone: p["phone"],
           email : p["email"],
           comments : p["comments"],
-
+          hours: await getPantryHours(p["id"]),
         });
       }
+      console.log(hours);
       setPantryLocations(locations);
     }
     setFromAPI();
@@ -105,10 +106,19 @@ function PopupText(loc)
   return (
     <div style={{ width: "400px", maxHeight: "600px", overflowY: "auto", overflowX: "hidden" }}>
       <h3> {loc.name} </h3>
-      <p> <HiOutlineLocationMarker/> : {loc.address}</p>
-      <p> <IoLink/> : {loc.url}</p>
+      <p> <HiOutlineLocationMarker/>  {loc.address}</p>
+      <div>
+        <p style={{ margin: "2px 0" }}> <FaClock/> OPEN/CLOSED TODO </p>
+        {loc.hours && loc.hours.map((h) => (
+        <p key={h.id} style={{ margin: "2px 0" }}>
+          &emsp; {h.day_of_week}: {h.status === "CLOSED" ? "Closed" : `${h.open_time} - ${h.close_time ?? "varies"}`}
+        </p>
+        ))}
+        {!loc.hours && <p>HOURS UNKNOWN</p>}
+      </div>
+      <p> <IoLink/>  {loc.url}</p>
       <p> <MdPhone/> {loc.phone}</p>
-      <p> <MdEmail/>: {loc.email}</p>
+      <p> <MdEmail/> {loc.email}</p>
       <p> <FaRegCommentDots/> : {loc.comments}</p>
     </div>
   )
