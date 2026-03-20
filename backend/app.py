@@ -138,8 +138,8 @@ def get_pantries():
     city = request.args.get("city")
     supported_diets = request.args.get("supported_diets")
     eligibility = request.args.get("eligibility")
-    open_now = request.args.get("open_now", type=bool)
-    show_unknown = request.args.get("show_unknown", type=bool)
+    open_now = True if "open_now" in request.args else None
+    show_unknown = True if "show_unknown" in request.args else None
 
     query = db.select(Pantries).order_by(Pantries.id)
     if zip_code:
@@ -201,8 +201,16 @@ def get_pantries():
         formatted_est_time = current_est_time.strftime("%-I:%M:%S %p")
         query = query.join(PantryHours, Pantries.id == PantryHours.pantry_id).where(
             PantryHours.day_of_week == current_weekday,
+            (
+                or_(PantryHours.status == "OPEN", PantryHours.status == "UNKNOWN")
+                if show_unknown
+                else PantryHours.status == "OPEN"
+            ),
             PantryHours.open_time < formatted_est_time,
-            PantryHours.close_time > formatted_est_time,
+            or_(
+                PantryHours.close_time == None,
+                PantryHours.close_time > formatted_est_time,
+            ),
         )
 
     results = db.session.execute(query).scalars().all()
