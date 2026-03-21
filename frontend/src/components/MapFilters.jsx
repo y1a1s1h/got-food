@@ -1,17 +1,15 @@
 import { useState } from "react";
 import "../styles/MapFilters.css";
 
-const MapFilters = () => {
+const MapFilters = ({ onSearch }) => {
   const [searchLocation, setSearchLocation] = useState("");
   const [kosher, setKosher] = useState(false);
   const [halal, setHalal] = useState(false);
   const [residentialZip, setResidentialZip] = useState("");
+  const [showOpen, setShowOpen] = useState(false);
 
-  {
-    /* All this does is just log what we put in for now, change this later to actually query */
-  }
   const handleSearch = () => {
-    console.log({ searchLocation, kosher, halal, residentialZip });
+    onSearch({ searchLocation, kosher, halal, residentialZip, showOpen });
   };
 
   return (
@@ -94,6 +92,35 @@ const MapFilters = () => {
           placeholder="Zipcode..."
           className="filter-text-input"
         />
+      </div>
+
+      <div className="filter-divider" />
+
+      <div className="filter-section">
+        <label className="filter-checkbox-label">
+          <input
+            type="checkbox"
+            checked={showOpen}
+            onChange={(e) => setShowOpen(e.target.checked)}
+            className="filter-checkbox-input"
+          />
+          <span
+            className={`filter-custom-checkbox${showOpen ? " checked" : ""}`}
+          >
+            {showOpen && (
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                <path
+                  d="M2 6l3 3 5-5"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </span>
+          <span className="filter-checkbox-text">Only Show Currently Open</span>
+        </label>
       </div>
 
       {/* Search Button */}
