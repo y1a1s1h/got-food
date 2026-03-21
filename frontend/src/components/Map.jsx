@@ -27,10 +27,6 @@ function DisplayMap() {
     async function setFromAPI() {
       const pantries = await getAllPantries();
       const open = await getPantriesOpenNow();
-
-      /* Only obtain position and name of pantry to display.
-       * TODO: Change this later to more detailed information.
-       */
       let locations = [];
       for (let p of pantries) {
         locations.push({
@@ -42,7 +38,7 @@ function DisplayMap() {
           phone: p["phone"],
           email : p["email"],
           comments : p["comments"],
-          hours: await getPantryHours(p["id"]),
+          hours: p["hours"],
         });
       }
       setPantryLocations(locations);

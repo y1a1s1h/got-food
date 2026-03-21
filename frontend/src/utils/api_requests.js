@@ -42,7 +42,7 @@ async function getPantries(
       } else {
         ampersand_prefix = true;
       }
-      url += "open_now";
+      url += "open_now=true";
     }
 
     // Append eligibility
@@ -72,7 +72,7 @@ async function getPantries(
       } else {
         ampersand_prefix = true;
       }
-      url += "show_unknown";
+      url += "show_unknown=true";
     }
 
     // Dispatch request
@@ -87,6 +87,7 @@ async function getPantries(
 
 /**
  * Obtains a JSON object containing all pantry entries stored in the database.
+ * Also obtains their hourly information.
  *
  * @returns {Object} A JSON object containing a pantry entry at each index.
  */
@@ -96,7 +97,7 @@ export async function getAllPantries() {
 
 /**
  * Obtains a JSON object containing all pantry entries that are currently
- * open, based on Eastern Standard Time.
+ * open, based on Eastern Standard Time. Also includes their hourly information.
  *
  * @returns {Object} A JSON object containing all open pantries.
  */
@@ -106,7 +107,7 @@ export async function getPantriesOpenNow() {
 
 /**
  * Obtains a JSON object containing the pantry information of the pantry with
- * id ID.
+ * id ID. This also returns its associated hours in the JSON field "hours".
  *
  * @param {number} id - The ID of the pantry to look up.
  * @returns {Object} An
@@ -123,7 +124,7 @@ export async function getPantryByID(id) {
 }
 
 /**
- * Queries the database for pantry of id ID to obtain its stored hours of operation.
+ * Queries the database for pantry of id ID to obtain only its stored hours of operation.
  *
  * @param {number} id - The ID of the pantry that we want to find the hours of.
  * @returns {Object} A JSON object containing the pantry's hours.
@@ -165,51 +166,3 @@ export async function getEligiblePantries(eligible_zip) {
 export async function getPantriesThatSupportDiets(diets) {
   return await getPantries(undefined, undefined, diets, false);
 }
-
-// Function tests here
-console.log("Testing getAllPantries()");
-console.log("  getAllPantries(): " + JSON.stringify(await getAllPantries()));
-
-console.log("Testing getPantryById() with ID 1");
-console.log("  getPantryById(1): " + JSON.stringify(await getPantryByID(1)));
-
-console.log("Testing getPantryById() error handling, with ID -1");
-console.log("  getPantryById(-1): " + JSON.stringify(await getPantryByID(-1)));
-
-console.log("Testing getPantryHours() with ID 1");
-console.log("  getPantryHours(1): " + JSON.stringify(await getPantryHours(1)));
-
-console.log("Testing getPantryHours() error handling, with ID -1");
-console.log(
-  "  getPantryHours(-1): " + JSON.stringify(await getPantryHours(-1)),
-);
-
-console.log("Testing getPantriesOpenNow()");
-console.log(
-  "getPantriesOpenNow(): " + JSON.stringify(await getPantriesOpenNow()),
-);
-
-console.log("Testing getEligiblePantries()");
-console.log(
-  "getEligiblePantries(): " +
-    JSON.stringify(await getEligiblePantries("22180")),
-);
-
-console.log("Testing getEligiblePantries() error handling, with zip -1");
-console.log(
-  "getEligiblePantries(): " + JSON.stringify(await getEligiblePantries("-1")),
-);
-
-console.log("Testing getPantriesThatSupportDiets()");
-console.log(
-  "getPantriesThatSupportDiets(): " +
-    JSON.stringify(await getPantriesThatSupportDiets(["Halal", "Vegan"])),
-);
-
-console.log(
-  "Testing getPantriesThatSupportDiets() error handling, with unknown diet",
-);
-console.log(
-  "getPantriesThatSupportDiets(): " +
-    JSON.stringify(await getPantriesThatSupportDiets(["unknown"])),
-);
