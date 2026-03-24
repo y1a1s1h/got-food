@@ -11,6 +11,7 @@ import { MdEmail, MdPhone } from "react-icons/md";
 import { HiOutlineLocationMarker } from "react-icons/hi";
 import { IoLink } from "react-icons/io5";
 import { FaRegCommentDots, FaClock } from "react-icons/fa";
+import { getPantryStatus } from "../utils/get_pantry_status";
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -67,7 +68,9 @@ function DisplayMap() {
         />
         {pantryLocations.map((loc, index) => (
           <Marker key={index} position={loc.position}>
-            <Popup maxWidth={400} maxHeight={600}>{PopupText(loc, openPantries)}</Popup>
+            <Popup maxWidth={420} maxHeight={550}>
+              {PopupText(loc, openPantries)}
+            </Popup>
           </Marker>
         ))}
       </MapContainer>
@@ -101,12 +104,19 @@ function PopupText(loc, openPantries)
   {
     loc.comments = "none"
   }
+  const status = getPantryStatus(loc.hours)
+  const statusLabel =
+    { open: "Open", closed: "Closed", varied: "Varied hours" }[status] ??
+    "Closed";
+
   return (
     <div style={{ width: "400px", maxHeight: "600px", overflowY: "auto", overflowX: "hidden" }}>
       <h3> {loc.name} </h3>
-      <p> <HiOutlineLocationMarker/>  {loc.address}</p>
+      <p> <HiOutlineLocationMarker size = {20}/>  :{"   "} {loc.address}</p>
       <div>
-        <p style={{ margin: "2px 0" }}> <FaClock/> {openPantries.some((p) => p.id === loc.id) ? "OPEN" : "CLOSED"} </p>
+        <h3 style={{ margin: "2px 0", color: { Open: "green", Closed: "red", "Varied hours": "orange" }[statusLabel] ?? "red" }}>
+        <FaClock/> {statusLabel}
+        </h3>
         {loc.hours && loc.hours.map((h) => (
         <p key={h.id} style={{ margin: "2px 0" }}>
           &emsp; {h.day_of_week}: {h.status === "CLOSED" ? "Closed" : `${h.open_time} - ${h.close_time ?? "varies"}`}
@@ -114,10 +124,12 @@ function PopupText(loc, openPantries)
         ))}
         {!loc.hours && <p>HOURS UNKNOWN</p>}
       </div>
-      <p> <IoLink/>  {loc.url}</p>
-      <p> <MdPhone/> {loc.phone}</p>
-      <p> <MdEmail/> {loc.email}</p>
-      <p> <FaRegCommentDots/> : {loc.comments}</p>
+      <p> <IoLink size = {20}/>  :{"   "}<a href = {loc.url} target="_blank"> {loc.url}</a></p>
+      <p> <MdPhone size = {20}/> :{"   "}{loc.phone}</p>
+      <p> <MdEmail size = {20}/> :{"   "}{loc.email}</p>
+      <p style={{ paddingLeft: "1.5rem" }}>
+        <FaRegCommentDots size={20} style={{ marginLeft: "-1.5rem" }} /> :{"   "}{loc.comments}
+      </p>
     </div>
   )
 }
