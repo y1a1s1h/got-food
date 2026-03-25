@@ -4,75 +4,90 @@
  * illusion of several distinct JS functions that all call to the same API
  * with different parameters.
  *
- * @param {boolean} open_now - True if we want to get all pantries that are open
+ * @param {boolean} openNow - True if we want to get all pantries that are open
  * currently (based on EST).
- * @param {string} eligible_zip - The single ZIP code of the user's residential
+ * @param {string} eligibleZip - The single ZIP code of the user's residential
  * address. This gets all pantries that the user is eligible to attend.
- * @param {Array[String]} supported_diets - An array of all of the user's requested
+ * @param {Array[String]} supportedDiets - An array of all of the user's requested
  * diets. This returns all pantries that support at least one of the specified diets.
- * @param {boolean} show_unknown - A more internal query parameter that allows us
+ * @param {boolean} showUnknown - A more internal query parameter that allows us
  * to specify whether or not we should display to the user pantries that do not
  * contain any information about their query. If we want to show the user vague entries,
  * specify true, else false.
+ * @param {boolean} variedOnly - Whether or not you want the API call to only
+ * return pantries that have variable hours, based on its database entry.
+ * 
  * @returns {Object} The result of the query.
  */
 export async function getPantries(
-  open_now = false,
-  eligible_zip = undefined,
-  supported_diets = undefined,
-  show_unknown = true,
+  openNow = false,
+  eligibleZip = undefined,
+  supportedDiets = undefined,
+  showUnknown = true,
+  variedOnly = false,
 ) {
   try {
     let url = "/api/pantries";
-    let ampersand_prefix = false;
+    let ampersandPrefix = false;
 
     // Prepare URL for query parameters
     if (
-      open_now ||
-      eligible_zip !== undefined ||
-      supported_diets !== undefined ||
-      show_unknown
+      openNow ||
+      eligibleZip !== undefined ||
+      supportedDiets !== undefined ||
+      showUnknown ||
+      variedOnly
     )
       url += "?";
 
-    // Append open_now query parameter
-    if (open_now) {
-      if (ampersand_prefix) {
+    // Append openNow query parameter
+    if (openNow) {
+      if (ampersandPrefix) {
         url += "&";
       } else {
-        ampersand_prefix = true;
+        ampersandPrefix = true;
       }
       url += "open_now=true";
     }
 
     // Append eligibility
-    if (eligible_zip !== undefined) {
-      if (ampersand_prefix) {
+    if (eligibleZip !== undefined) {
+      if (ampersandPrefix) {
         url += "&";
       } else {
-        ampersand_prefix = true;
+        ampersandPrefix = true;
       }
-      url += "eligibility=" + eligible_zip;
+      url += "eligibility=" + eligibleZip;
     }
 
     // Append supported diets
-    if (supported_diets !== undefined) {
-      if (ampersand_prefix) {
+    if (supportedDiets !== undefined) {
+      if (ampersandPrefix) {
         url += "&";
       } else {
-        ampersand_prefix = true;
+        ampersandPrefix = true;
       }
-      url += "supported_diets=" + supported_diets.toString();
+      url += "supported_diets=" + supportedDiets.toString();
     }
 
     // Append show_unknown
-    if (show_unknown) {
-      if (ampersand_prefix) {
+    if (showUnknown) {
+      if (ampersandPrefix) {
         url += "&";
       } else {
-        ampersand_prefix = true;
+        ampersandPrefix = true;
       }
       url += "show_unknown=true";
+    }
+
+    // Append varied_only
+    if (variedOnly) {
+      if (ampersandPrefix) {
+        url += "&";
+      } else {
+        ampersandPrefix = true;
+      }
+      url += "varied_only=true";
     }
 
     // Dispatch request
@@ -103,6 +118,18 @@ export async function getAllPantries() {
  */
 export async function getPantriesOpenNow() {
   return await getPantries(true);
+}
+
+/**
+ * Obtains a JSON object containing all pantry entries that have variable hours.
+ * Note that this does not account for whether or not they should be currently
+ * considered open or closed; it solely looks at their database entry.
+ * 
+ * @returns {Object} A JSON object containing all pantries with variable hours,
+ * no matter if they are open or closed at the moment.
+ */
+export async function getPantriesWithVariedHours() {
+  return await getPantries(undefined, undefined, undefined, undefined, true);
 }
 
 /**
@@ -142,15 +169,15 @@ export async function getPantryHours(id) {
 
 /**
  * Queries the database for all pantries that support the residential ZIP code
- * ELIGIBLE_ZIP. Note that this does not locate all pantries located WITHIN
- * ELIGIBLE_ZIP -- this finds the pantries that will serve the specified ZIP
+ * eligibleZip. Note that this does not locate all pantries located WITHIN
+ * eligibleZip -- this finds the pantries that will serve the specified ZIP
  * code.
  *
- * @param {string} eligible_zip - The user's residential ZIP code.
- * @returns {Object} A JSON object containing all pantries that serve ELIGIBLE_ZIP.
+ * @param {string} eligibleZip - The user's residential ZIP code.
+ * @returns {Object} A JSON object containing all pantries that serve eligibleZip.
  */
-export async function getEligiblePantries(eligible_zip) {
-  return await getPantries(undefined, eligible_zip);
+export async function getEligiblePantries(eligibleZip) {
+  return await getPantries(undefined, eligibleZip);
 }
 
 /**
@@ -166,3 +193,5 @@ export async function getEligiblePantries(eligible_zip) {
 export async function getPantriesThatSupportDiets(diets) {
   return await getPantries(undefined, undefined, diets, false);
 }
+
+console.log("get variable pantries: ", await getPantriesWithVariedHours());
