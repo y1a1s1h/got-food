@@ -202,13 +202,13 @@ def get_pantries():
         if show_unknown:
             query = query.where(
                 or_(
-                    Pantries.eligibility.overlap(["ANY", eligibility]),
+                    Pantries.eligibility.overlap(["ANY", "ANY (VA)", eligibility]),
                     Pantries.eligibility == None,
                 )
             )
         else:
             query = query.where(
-                Pantries.eligibility.overlap(["ANY", eligibility]),
+                Pantries.eligibility.overlap(["ANY", "ANY (VA)", eligibility]),
             )
 
     if open_now:

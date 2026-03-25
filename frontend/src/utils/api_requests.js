@@ -193,5 +193,3 @@ export async function getEligiblePantries(eligibleZip) {
 export async function getPantriesThatSupportDiets(diets) {
   return await getPantries(undefined, undefined, diets, false);
 }
-
-console.log("get variable pantries: ", await getPantriesWithVariedHours());
