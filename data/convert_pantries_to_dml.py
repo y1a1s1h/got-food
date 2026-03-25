@@ -27,8 +27,8 @@ OUTPUT_FILE_PATH = "../backend/db-init/02_initial_pantries_and_hours.sql"
 
 # Template used to insert entries into the pantries table.
 INSERT_PANTRY_TEMPLATE = """
-INSERT INTO pantries (id, url, name, address, city, zip, latitude, longitude, phone, email, eligibility, supported_diets, comments)
-VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+INSERT INTO pantries (id, url, name, address, city, state, zip, latitude, longitude, phone, email, eligibility, supported_diets, comments, has_variable_hours)
+VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
 ON CONFLICT DO NOTHING;
 """
 
@@ -61,6 +61,8 @@ def postgres_prepare_value(
         The value, formatted and ready for insertion into the DB.
     """
     match val:
+        case bool():
+            return "TRUE" if val else "FALSE"
         case int():
             return val
         case str():
@@ -88,6 +90,7 @@ def insert_pantry(
     name: str,
     address: str,
     city: str,
+    state: str,
     zip_code: str,
     latitude: str,
     longitude: str,
@@ -96,6 +99,7 @@ def insert_pantry(
     eligibility: str | None,
     diets: str | None,
     comments: str | None,
+    has_variable_hours: str,
 ) -> int:
     """Writes the insert command for the given pantry to our SQL initialization
     file.
@@ -103,9 +107,9 @@ def insert_pantry(
     The command will be inserting:
     (
         id, url, name, address,
-        city, zip, phone, email,
+        city, state, zip, phone, email,
         eligibility, supported_diets,
-        comments
+        comments, varied_hours
     )
 
     Params:
@@ -114,6 +118,7 @@ def insert_pantry(
         name: The name of the food pantry.
         address: The address of the food pantry.
         city: The city in which the pantry is located.
+        state: The state in which the pnatry is located.
         zip_code: The ZIP code in which the pantry is located.
         phone: The phone number to contact the pantry at.
         email: The email of the pantry.
@@ -122,6 +127,8 @@ def insert_pantry(
         diets: The parsed diets field representing the food pantry's accommodated
             diets.
         comments: Any miscellaneous comments associated with the pantry.
+        has_variable_hours: Whether or not this pantry has abnormal hours, e.g. only
+            open on one Saturday of the month or only open until supplies last.
     Returns:
         The pantry_id of the inserted pantry.
     """
@@ -138,6 +145,18 @@ def insert_pantry(
     if diets is not None:
         diets = diets.split(",")
 
+    # Convert has_variable_hours field to boolean
+    if has_variable_hours == "Yes":
+        has_variable_hours = True
+    elif has_variable_hours == "N/A":
+        has_variable_hours = False
+    else:
+        print(
+            f"ERROR: insert_pantry: unexpected has_variable_hours value of {has_variable_hours}, for pantry with name {name}. Please rectify this issue in the Excel sheet.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     file.write(
         pantry_template.format(
             postgres_prepare_value(pantry_id),
@@ -145,6 +164,7 @@ def insert_pantry(
             postgres_prepare_value(name),
             postgres_prepare_value(address),
             postgres_prepare_value(city),
+            postgres_prepare_value(state),
             postgres_prepare_value(zip_code),
             postgres_prepare_value(float(latitude)),
             postgres_prepare_value(float(longitude)),
@@ -153,6 +173,7 @@ def insert_pantry(
             postgres_prepare_value(eligibility),
             postgres_prepare_value(diets, cast_to_diet_arr=True),
             postgres_prepare_value(comments),
+            postgres_prepare_value(has_variable_hours),
         )
     )
     pantry_id += 1
@@ -264,6 +285,8 @@ def main() -> None:
                 close_sa,
                 open_su,
                 close_su,
+                has_variable_hours,
+                state,
             ) = pantry
 
             # Write insert statement for the pantry
@@ -273,6 +296,7 @@ def main() -> None:
                 name,
                 address,
                 city,
+                state,
                 zip_code,
                 latitude,
                 longitude,
@@ -281,6 +305,7 @@ def main() -> None:
                 eligibility,
                 diets,
                 comments,
+                has_variable_hours,
             )
 
             # Write insert statements for the pantry's daily hours
