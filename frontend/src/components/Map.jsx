@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -7,12 +7,32 @@ import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
 import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
+import { getPantryStatus } from "../utils/get_pantry_status"
+
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 });
+
+const STATUS_ICONS = {
+  open: new L.Icon({
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
+    shadowUrl: markerShadow,
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+  }),
+  closed: new L.Icon({
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+    shadowUrl: markerShadow,
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+  }),
+  varied: new L.Icon({
+    iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png",
+    shadowUrl: markerShadow,
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
+  }),
+};
 
 function FlyToMarker({ selectedPantry }) {
   const map = useMap();
@@ -68,18 +88,24 @@ function DisplayMap({ pantries, selectedPantry, onSelectPantry }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FlyToMarker selectedPantry={selectedPantry} />
-        {pantryLocations.map((loc, index) => (
-          <Marker
-            key={index}
-            position={loc.position}
-            eventHandlers={{
-              click: (e) => {
-                e.target._map.flyTo(loc.position, 13, { duration: 1.2 });
-                onSelectPantry?.(loc.id);
-              },
-            }}
-          ></Marker>
-        ))}
+        {pantryLocations.map((loc, index) => {
+          const status = getPantryStatus(loc.hours);
+          const icon = STATUS_ICONS[status] ?? STATUS_ICONS.closed;
+
+          return (
+            <Marker
+              key={index}
+              position={loc.position}
+              icon={icon}
+              eventHandlers={{
+                click: (e) => {
+                  e.target._map.flyTo(loc.position, 13, { duration: 1.2 });
+                  onSelectPantry?.(loc.id);
+                },
+              }}
+            />
+          );
+        })}
       </MapContainer>
     </div>
   );
