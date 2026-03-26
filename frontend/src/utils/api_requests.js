@@ -95,7 +95,7 @@ export async function getPantries(
     if (!res.ok) throw new Error(res.status);
     return await res.json();
   } catch (err) {
-    if (open_now) console.log("ERROR: getAllPantries(): " + err);
+    if (openNow) console.log("ERROR: getAllPantries(): " + err);
     return null;
   }
 }
@@ -129,7 +129,7 @@ export async function getPantriesOpenNow() {
  * no matter if they are open or closed at the moment.
  */
 export async function getPantriesWithVariedHours() {
-  return await getPantries(undefined, undefined, undefined, undefined, true);
+  return await getPantries(true, undefined, undefined, undefined, true);
 }
 
 /**
@@ -137,7 +137,8 @@ export async function getPantriesWithVariedHours() {
  * id ID. This also returns its associated hours in the JSON field "hours".
  *
  * @param {number} id - The ID of the pantry to look up.
- * @returns {Object} An
+ * @returns {Object} A JSON object containing all of the data for pantry with
+ * id ID.
  */
 export async function getPantryByID(id) {
   try {
