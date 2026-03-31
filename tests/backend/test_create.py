@@ -128,7 +128,7 @@ def test_pantries_optional_fields_some_none(client):
     data = deepcopy(PANTRY_VALID_MANDATORY_DATA)
     data["comments"] = None
     data["supported_diet"] = None
-    data["eligibility"] = "20301"
+    data["eligibility"] = ["20301"]
     response = client.post("/api/pantries", data=data)
     assert response.status_code == 201
 
@@ -136,11 +136,28 @@ def test_pantries_optional_fields_some_none(client):
 def test_pantries_eligibility_violating_constraint(client):
     data = deepcopy(PANTRY_VALID_MANDATORY_DATA)
     data["comments"] = None
-    data["supported_diet"] = None
+    data["supported_diets"] = None
     data["eligibility"] = "Hello world!"
     response = client.post("/api/pantries", data=data)
     assert response.status_code == 400
 
+def test_pantries_eligibility_multiple(client):
+    data = deepcopy(PANTRY_VALID_MANDATORY_DATA)
+    data["comments"] = None
+    data["supported_diets"] = None
+    data["eligibility"] = ["24060", "24061"]
+    response = client.post("/api/pantries", data=data)
+    assert response.status_code == 201
+    assert response.json["eligibility"] == ["24060", "24061"]
+
+def test_pantries_diets_multiple(client):
+    data = deepcopy(PANTRY_VALID_MANDATORY_DATA)
+    data["comments"] = None
+    data["supported_diets"] = ["Halal", "Vegan"]
+    data["eligibility"] = None
+    response = client.post("/api/pantries", data=data)
+    assert response.status_code == 201
+    assert response.json["supported_diets"] == ["HALAL", "VEGAN"]
 
 def test_pantries_coordinates_violating_constraint(client):
     data = deepcopy(PANTRY_VALID_MANDATORY_DATA)
@@ -153,8 +170,8 @@ def test_pantries_coordinates_violating_constraint(client):
 def test_pantries_optional_fields_all_valid(client):
     data = deepcopy(PANTRY_VALID_MANDATORY_DATA)
     data["comments"] = "Only open on every third Saturday of the month."
-    data["supported_diet"] = "Halal"
-    data["eligibility"] = "20301"
+    data["supported_diets"] = ["Halal"]
+    data["eligibility"] = ["20301"]
     response = client.post("/api/pantries", data=data)
     assert response.status_code == 201
 

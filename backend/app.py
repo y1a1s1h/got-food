@@ -250,28 +250,6 @@ def get_pantries():
 # -------------------------
 @app.route("/api/pantries", methods=["POST"])
 def post_pantries():
-    # If variable hours is present, ensure that it is a boolean
-    has_variable_hours = request.form.get("has_variable_hours")
-    if has_variable_hours is not None:
-        if has_variable_hours.casefold() == "true":
-            has_variable_hours = True
-        elif has_variable_hours.casefold() == "false":
-            has_variable_hours = False
-        else:
-            res = {
-                "error_type": ValueError.__name__,
-                "message": f"has_variable_hours must be boolean, not {{{has_variable_hours}}}.",
-            }
-            return res, 400
-
-    # Split eligibility, diets into lists
-    eligibility = request.form.get("eligibility")
-    if eligibility is not None:
-        eligibility = eligibility.split(",")
-    supported_diets = request.form.get("supported_diets")
-    if supported_diets is not None:
-        supported_diets = supported_diets.split(",")
-
     # Construct model object
     pantry = Pantries(
         url=request.form.get("url"),
@@ -284,13 +262,39 @@ def post_pantries():
         longitude=request.form.get("longitude", type=float),
         phone=request.form.get("phone"),
         email=request.form.get("email"),
-        eligibility=eligibility,
-        supported_diets=supported_diets,
+        eligibility=request.form.getlist("eligibility"),
+        supported_diets=request.form.getlist("supported_diets"),
         comments=request.form.get("comments"),
-        has_variable_hours=has_variable_hours,
+        has_variable_hours=request.form.get("has_variable_hours"),
     )
 
+    # Convert supported_diets to enum equivalent
+    if pantry.supported_diets is not None:
+        try:
+            pantry.supported_diets = [
+                SupportedDiet(d.upper()) for d in pantry.supported_diets
+            ]
+        except KeyError as e:
+            res = {"error_type": type(e).__name__, "message": str(e)}
+            return res, 400
+
+    # Convert has_variable_hours to bool equivalent
+    if pantry.has_variable_hours is not None:
+        match pantry.has_variable_hours.casefold():
+            case "true":
+                pantry.has_variable_hours = True
+            case "false":
+                pantry.has_variable_hours = False
+            case _:
+                res = {
+                    "error_type": ValueError.__name__,
+                    "message": f"has_variable_hours must be boolean, not {{{pantry.has_variable_hours}}}.",
+                }
+                return res, 400
+
+    # Insert into DB
     try:
+        print(str(pantry.serialize()), flush=True)
         db.session.add(pantry)
         db.session.commit()
     except (IntegrityError, DataError) as e:
@@ -332,36 +336,36 @@ def get_pantry_hours(pantry_id):
 # -------------------------
 @app.route("/api/pantries/<int:uri_pantry_id>/hours", methods=["POST"])
 def post_pantry_hours(uri_pantry_id):
+
+    # Construct model object
+    hours = PantryHours(
+        pantry_id=request.form.get("pantry_id", type=int),
+        day_of_week=request.form.get("day_of_week", type=Weekday),
+        status=request.form.get("status", type=HourlyRangeStatus),
+        open_time=request.form.get("open_time"),
+        close_time=request.form.get("close_time"),
+    )
+
     # Ensure URI pantry ID and form data pantry ID are in alignment
-    pantry_id = request.form.get("pantry_id", type=int)
-    if pantry_id is not None and pantry_id != uri_pantry_id:
-        return {
-            "error_type": "ValueError",
-            "message": f"The pantry_id {{{pantry_id}}} provided in the submitted form does not patch that of the URI, {{{uri_pantry_id}}}. Please ensure that they are equivalent.",
-        }, 400
+    if hours.pantry_id is not None:
+        if hours.pantry_id != uri_pantry_id:
+            return {
+                "error_type": "ValueError",
+                "message": f"The pantry_id {{{hours.pantry_id}}} provided in the submitted form does not patch that of the URI, {{{uri_pantry_id}}}. Please ensure that they are equivalent.",
+            }, 400
 
     # Parse datetimes, if there are any. Ensure that they are of the form
     # HH:MM <AM/PM>.
-    open_time = request.form.get("open_time")
-    close_time = request.form.get("close_time")
     try:
-        if open_time is not None:
-            open_time = datetime.strptime(open_time, "%I:%M %p")
-        if close_time is not None:
-            close_time = datetime.strptime(close_time, "%I:%M %p")
+        if hours.open_time is not None:
+            hours.open_time = datetime.strptime(hours.open_time, "%I:%M %p")
+        if hours.close_time is not None:
+            hours.close_time = datetime.strptime(hours.close_time, "%I:%M %p")
     except ValueError as e:
         return {
             "error_type": type(e).__name__,
             "message": "Open and closing times need to be of the form HH:MM <AM/PM>.",
         }, 400
-
-    hours = PantryHours(
-        pantry_id=request.form.get("pantry_id", type=int),
-        day_of_week=request.form.get("day_of_week", type=Weekday),
-        status=request.form.get("status", type=HourlyRangeStatus),
-        open_time=open_time,
-        close_time=close_time,
-    )
 
     # Insert into DB and handle specific errors
     try:
