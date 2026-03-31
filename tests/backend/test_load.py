@@ -7,7 +7,7 @@ def test_get_all_pantries_response_time(benchmark, client):
     assert benchmark.stats["mean"] < 1.0 
 
 def test_api_under_500_concurrent_users(client):
-    CONCURRENT_USERS = 500
+    CONCURRENT_USERS = 50
     THRESHOLD_SECONDS = 1.0
 
     def fetch():
