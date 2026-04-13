@@ -833,7 +833,7 @@ VALUES (26, 'SUNDAY', 'CLOSED', NULL, NULL)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO pantries (url, name, address, city, state, zip, latitude, longitude, phone, email, eligibility, supported_diets, comments, has_variable_hours)
-VALUES ('https://afac.org/', 'Arlington Food Asistance Center', '2708 S. Nelson Street', 'Arlington', 'VA', '22206', 38.84362412, -77.08932947, '(703) 845-8486', 'clientservices@afac.org', ARRAY['22101', '22213', '22207', '22205', '22201', '22209', '22203', '22204', '22206', '22211', '20301', '22202', '20001'], CAST ( ARRAY['ANY'] AS supported_diet[] ), 'Must live in Arlington and get a referral from an Arlington County social service agency.', FALSE)
+VALUES ('https://afac.org/', 'Arlington Food Assistance Center', '2708 S. Nelson Street', 'Arlington', 'VA', '22206', 38.84362412, -77.08932947, '(703) 845-8486', 'clientservices@afac.org', ARRAY['22101', '22213', '22207', '22205', '22201', '22209', '22203', '22204', '22206', '22211', '20301', '22202', '20001'], CAST ( ARRAY['ANY'] AS supported_diet[] ), 'Must live in Arlington and get a referral from an Arlington County social service agency.', FALSE)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO pantry_hours (pantry_id, day_of_week, status, open_time, close_time)
