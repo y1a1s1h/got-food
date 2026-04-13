@@ -1,11 +1,12 @@
 import os
-
+import json
 from flask import Flask, request, jsonify, abort
 from flask_caching import Cache
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError, DataError
+from werkzeug.exceptions import HTTPException
 from psycopg2 import errors
 from sqlalchemy import or_, and_
 from datetime import datetime
@@ -152,6 +153,26 @@ class PantryHours(db.Model):
             "close_time": close_time,
         }
 
+
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    """
+    Default generic error handler from the Flask docs.
+    Returns JSON instead of HTML for HTTP errors.
+    Automatically converts Aborts to JSON.
+    """
+    response = e.get_response()
+    response.data = json.dumps(
+        {
+            "code": e.code,
+            "name": e.name,
+            "description": e.description,
+        }
+    )
+    response.content_type = "application/json"
+    return response
+
+
 @cache.memoize()
 def get_pantries_memoized(
     zip_code, city, supported_diets, eligibility, open_now, varied_only, show_unknown
@@ -165,46 +186,26 @@ def get_pantries_memoized(
         query = query.filter_by(city=city)
 
     if supported_diets:
-        # Create comma-separated list, with diets in all caps, matching DB format
-        supported_diets = [x.upper() for x in supported_diets.split(",")]
-
-        # Validate given diet query, since an error will throw if you try to
-        # query an invalid ENUM value
-        invalid_diets = [
-            diet for diet in supported_diets if diet not in SupportedDiet._member_names_
-        ]
-        if len(invalid_diets) > 0:
-            return jsonify(
-                abort(
-                    404,
-                    f"ERROR: given diet(s) {invalid_diets} do not match available choices",
-                )
+        try:
+            supported_diets = [
+                SupportedDiet(d.upper()) for d in supported_diets.split(",")
+            ]
+        except ValueError as e:
+            abort(
+                404,
+                f"Given diet(s) {e.args[0]} do not match available choices: {", ".join(SupportedDiet._member_names_)}",
             )
 
+        condition = Pantries.supported_diets.overlap(["ANY"] + supported_diets)
         if show_unknown:
-            query = query.where(
-                or_(
-                    Pantries.supported_diets.overlap(["ANY"] + supported_diets),
-                    Pantries.supported_diets == None,
-                )
-            )
-        else:
-            query = query.where(
-                Pantries.supported_diets.overlap(["ANY"] + supported_diets)
-            )
+            condition = or_(condition, Pantries.supported_diets == None)
+        query = query.where(condition)
 
     if eligibility:
+        condition = Pantries.eligibility.overlap(["ANY", "ANY (VA)", eligibility])
         if show_unknown:
-            query = query.where(
-                or_(
-                    Pantries.eligibility.overlap(["ANY", "ANY (VA)", eligibility]),
-                    Pantries.eligibility == None,
-                )
-            )
-        else:
-            query = query.where(
-                Pantries.eligibility.overlap(["ANY", "ANY (VA)", eligibility]),
-            )
+            condition = or_(condition, Pantries.eligibility == None)
+        query = query.where(condition)
 
     if open_now:
         # Use the current EST time for current time and day of week, in case
@@ -290,9 +291,11 @@ def post_pantries():
             pantry.supported_diets = [
                 SupportedDiet(d.upper()) for d in pantry.supported_diets
             ]
-        except KeyError as e:
-            res = {"error_type": type(e).__name__, "message": str(e)}
-            return res, 400
+        except ValueError as e:
+            abort(
+                400,
+                f"Given diet(s) {e.args[0]} do not match available choices: {", ".join(SupportedDiet._member_names_)}",
+            )
 
     # Convert has_variable_hours to bool equivalent
     if pantry.has_variable_hours is not None:
@@ -302,11 +305,10 @@ def post_pantries():
             case "false":
                 pantry.has_variable_hours = False
             case _:
-                res = {
-                    "error_type": ValueError.__name__,
-                    "message": f"has_variable_hours must be boolean, not {{{pantry.has_variable_hours}}}.",
-                }
-                return res, 400
+                abort(
+                    400,
+                    f"has_variable_hours must be boolean (true/false), not {{{pantry.has_variable_hours}}}.",
+                )
 
     # Insert into DB
     try:
@@ -314,12 +316,21 @@ def post_pantries():
         db.session.commit()
     except (IntegrityError, DataError) as e:
         db.session.rollback()
-        res = {"error_type": type(e).__name__, "message": str(e)}
-        # Collision with another row
-        if type(e.orig) is errors.UniqueViolation:
-            return res, 409
-        return res, 400
-    
+        match e.orig:
+            case errors.UniqueViolation():
+                abort(
+                    409,
+                    "Given pantry data conflicts with an entry already in the database.",
+                )
+            case errors.NotNullViolation():
+                abort(400, "A mandatory field was passed in as null.")
+            case _:
+                abort(
+                    400,
+                    "Malformed pantry fields. Ensure that all fields are of the correct format.",
+                )
+
+    # Clear stale cached values on success
     cache.delete_memoized(get_pantries_memoized)
     cache.delete_memoized(get_pantry_by_id, pantry.id)
     cache.delete_memoized(get_pantry_hours, pantry.id)
@@ -375,13 +386,18 @@ def put_pantry_by_id(pantry_id):
     if eligibility:
         pantry.eligibility = eligibility
 
+    # Convert supported_diets to enum equivalent
     supported_diets = request.form.getlist("supported_diets")
     if supported_diets:
         try:
             pantry.supported_diets = [SupportedDiet(d.upper()) for d in supported_diets]
         except (KeyError, ValueError) as e:
-            return {"error_type": type(e).__name__, "message": str(e)}, 400
+            abort(
+                400,
+                f"Given diet(s) {e.args[0]} do not match available choices: {", ".join(SupportedDiet._member_names_)}",
+            )
 
+    # Convert has_variable_hours to bool equivalent
     has_variable_hours = request.form.get("has_variable_hours")
     if has_variable_hours is not None:
         match has_variable_hours.casefold():
@@ -390,21 +406,31 @@ def put_pantry_by_id(pantry_id):
             case "false":
                 pantry.has_variable_hours = False
             case _:
-                return {
-                    "error_type": ValueError.__name__,
-                    "message": f"has_variable_hours must be boolean, not {{{has_variable_hours}}}.",
-                }, 400
+                abort(
+                    400,
+                    f"has_variable_hours must be boolean, not {{{has_variable_hours}}}.",
+                )
 
+    # Insert into DB
     try:
         db.session.commit()
     except (IntegrityError, DataError) as e:
         db.session.rollback()
-        res = {"error_type": type(e).__name__, "message": str(e)}
-        if type(e.orig) is errors.UniqueViolation:
-            return res, 409
-        return res, 400
-    
-    # Clear memoized pantry data, since it's been updated
+        match e.orig:
+            case errors.UniqueViolation():
+                abort(
+                    409,
+                    "Given pantry data conflicts with an entry already in the database.",
+                )
+            case errors.NotNullViolation():
+                abort(400, "A mandatory field was passed in as null.")
+            case _:
+                abort(
+                    400,
+                    "Malformed pantry fields. Ensure that all fields are of the correct format.",
+                )
+
+    # Clear stale cached values on success
     cache.delete_memoized(get_pantries_memoized)
     cache.delete_memoized(get_pantry_by_id, pantry_id)
     cache.delete_memoized(get_pantry_hours, pantry_id)
@@ -418,17 +444,19 @@ def put_pantry_by_id(pantry_id):
 @app.route("/api/pantries/<int:pantry_id>", methods=["DELETE"])
 def delete_pantry_by_id(pantry_id):
     res = Pantries.query.filter(Pantries.id == pantry_id).delete()
-    db.session.commit()
 
     # If more than 1 row was deleted, this indicates a critical DB error,
     # since the combination of (id, pantry_id) should be unique
     if res > 1:
         db.session.rollback()
         abort(500, "The server encountered a multiple deletion error.")
+    elif res == 0:
+        abort(404, f"The targeted resource of pantry ID {pantry_id} was not found.")
+    db.session.commit()
     cache.delete_memoized(get_pantries_memoized)
     cache.delete_memoized(get_pantry_by_id, pantry_id)
     cache.delete_memoized(get_pantry_hours, pantry_id)
-    return {}, (200 if res == 1 else 404)
+    return {}, 200
 
 
 # -------------------------
@@ -461,12 +489,11 @@ def post_pantry_hours(uri_pantry_id):
     )
 
     # Ensure URI pantry ID and form data pantry ID are in alignment
-    if hours.pantry_id is not None:
-        if hours.pantry_id != uri_pantry_id:
-            return {
-                "error_type": "ValueError",
-                "message": f"The pantry_id {{{hours.pantry_id}}} provided in the submitted form does not patch that of the URI, {{{uri_pantry_id}}}. Please ensure that they are equivalent.",
-            }, 400
+    if hours.pantry_id is not None and hours.pantry_id != uri_pantry_id:
+        abort(
+            400,
+            f"The pantry_id {{{hours.pantry_id}}} provided in the submitted form does not patch that of the URI, {{{uri_pantry_id}}}. Please ensure that they are equivalent.",
+        )
 
     # Parse datetimes, if there are any. Ensure that they are of the form
     # HH:MM <AM/PM>.
@@ -476,10 +503,10 @@ def post_pantry_hours(uri_pantry_id):
         if hours.close_time is not None:
             hours.close_time = datetime.strptime(hours.close_time, "%I:%M %p")
     except ValueError as e:
-        return {
-            "error_type": type(e).__name__,
-            "message": "Open and closing times need to be of the form HH:MM <AM/PM>.",
-        }, 400
+        abort(
+            400,
+            f"Open and closing times need to be of the form HH:MM <AM/PM>, not '{e.args[0]}'.",
+        )
 
     # Insert into DB and handle specific errors
     try:
@@ -487,16 +514,21 @@ def post_pantry_hours(uri_pantry_id):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        res = {"error_type": type(e).__name__, "message": str(e)}
-
-        # Bad reference to entry in pantries table
-        if type(e.orig) is errors.ForeignKeyViolation:
-            return res, 404
-        # Collision with another row
-        elif type(e.orig) is errors.UniqueViolation:
-            return res, 409
-        # Bad form data
-        return res, 400
+        match e.orig:
+            case errors.ForeignKeyViolation():
+                abort(
+                    404, f"Given foreign key pantry ID {hours.pantry_id} was not found."
+                )
+            case errors.UniqueViolation():
+                abort(
+                    409,
+                    "The given hours entry's unique values conflict with another entry in the database.",
+                )
+            case _:
+                abort(
+                    400,
+                    "Malformed pantry hours fields. Ensure that all fields are of the correct format.",
+                )
     cache.delete_memoized(get_pantries_memoized)
     cache.delete_memoized(get_pantry_by_id, uri_pantry_id)
     cache.delete_memoized(get_pantry_hours, uri_pantry_id)
@@ -516,7 +548,10 @@ def put_pantry_hours(uri_pantry_id, uri_hours_id):
     ).scalar_one_or_none()
 
     if hours is None:
-        abort(404)
+        abort(
+            404,
+            "The hours entry associated with the given pantry and hours IDs was not found.",
+        )
 
     day_of_week = request.form.get("day_of_week", type=Weekday)
     if day_of_week is not None:
@@ -527,33 +562,33 @@ def put_pantry_hours(uri_pantry_id, uri_hours_id):
         hours.status = status
 
     open_time = request.form.get("open_time")
-    if open_time is not None:
-        try:
-            hours.open_time = datetime.strptime(open_time, "%I:%M %p")
-        except ValueError:
-            return {
-                "error_type": ValueError.__name__,
-                "message": "Open and closing times need to be of the form HH:MM <AM/PM>.",
-            }, 400
-
     close_time = request.form.get("close_time")
-    if close_time is not None:
-        try:
+    try:
+        if open_time is not None:
+            hours.open_time = datetime.strptime(open_time, "%I:%M %p")
+        if close_time is not None:
             hours.close_time = datetime.strptime(close_time, "%I:%M %p")
-        except ValueError:
-            return {
-                "error_type": ValueError.__name__,
-                "message": "Open and closing times need to be of the form HH:MM <AM/PM>.",
-            }, 400
+    except ValueError as e:
+        abort(
+            400,
+            f"Open and closing times need to be of the form HH:MM <AM/PM>, not '{e.args[0]}'.",
+        )
 
     try:
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        res = {"error_type": type(e).__name__, "message": str(e)}
-        if type(e.orig) is errors.UniqueViolation:
-            return res, 409
-        return res, 400
+        match e.orig:
+            case errors.UniqueViolation():
+                abort(
+                    409,
+                    "The given hours entry's unique values conflict with another entry in the database.",
+                )
+            case _:
+                abort(
+                    400,
+                    "Malformed pantry hours fields. Ensure that all fields are of the correct format.",
+                )
     cache.delete_memoized(get_pantries_memoized)
     cache.delete_memoized(get_pantry_by_id, uri_pantry_id)
     cache.delete_memoized(get_pantry_hours, uri_pantry_id)
@@ -571,17 +606,19 @@ def delete_hourly_range_by_id(uri_pantry_id, uri_hours_id):
     res = PantryHours.query.filter(
         PantryHours.pantry_id == uri_pantry_id, PantryHours.id == uri_hours_id
     ).delete()
-    db.session.commit()
 
     # If more than 1 row was deleted, this indicates a critical DB error,
     # since the combination of (id, pantry_id) should be unique
     if res > 1:
         db.session.rollback()
         abort(500, "The server encountered a multiple deletion error.")
+    elif res == 0:
+        abort(404, f"The targeted resource of pantry ID {uri_pantry_id} was not found.")
+    db.session.commit()
     cache.delete_memoized(get_pantries_memoized)
     cache.delete_memoized(get_pantry_by_id, uri_pantry_id)
     cache.delete_memoized(get_pantry_hours, uri_pantry_id)
-    return {}, (200 if res == 1 else 404)
+    return {}, 200
 
 
 if __name__ == "__main__":
