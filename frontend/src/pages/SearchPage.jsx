@@ -8,6 +8,7 @@ import { getAllPantries, getPantries } from "../utils/api_requests";
 import { STATE_NAMES } from "../utils/state_names";
 
 function SearchPage() {
+  const [allPantries, setAllPantries] = useState([]);
   const [pantries, setPantries] = useState([]);
   const [selectedPantry, setSelectedPantry] = useState(null);
   const [pantrySelection, setPantrySelection] = useState(null);
@@ -16,6 +17,7 @@ function SearchPage() {
     getAllPantries().then((data) => {
       console.log("Raw API response:", data);
       if (!data) return;
+      setAllPantries(data);
       setPantries(data);
     });
   }, []);
@@ -47,17 +49,13 @@ function SearchPage() {
       }
 
       if (searchLocation) {
-        const tokens = searchLocation
-          .toLowerCase()
-          .split(/\s+/)
-          .filter((t) => /[a-z0-9]/.test(t));
+        const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "");
+        const query = normalize(searchLocation);
         filtered = filtered.filter((p) => {
           const stateName = STATE_NAMES[p.state] ?? "";
-          const fields = [p.name, p.address, p.city, p.zip, p.state, stateName]
+          return [p.name, p.address, p.city, p.zip, p.state, stateName]
             .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-          return tokens.every((token) => fields.includes(token));
+            .some((field) => normalize(field).includes(query));
         });
       }
       setPantries(filtered);
@@ -100,7 +98,7 @@ function SearchPage() {
             }))
           }
         />
-        <Filter onSearch={handleSearch} />
+        <Filter onSearch={handleSearch} pantries={allPantries} />
       </main>
     </div>
   );
